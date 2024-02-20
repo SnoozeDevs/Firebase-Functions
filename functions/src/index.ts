@@ -16,22 +16,22 @@ import axios from "axios";
 
 export const getTeams = onRequest((request, response) => {
   logger.info("Hello logs!", {structuredData: true});
-  axios.get("https://api.squiggle.com.au/?q=teams",{
-    headers:{
-      "User-Agent":"easytippingdev@gmail.com"
-    }
+  axios.get("https://api.squiggle.com.au/?q=teams", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
   }).then((res)=>{
     response.send(res.data);
-  })
+  });
 });
 
 export const getGames2022 = onRequest((request, response) => {
   logger.info("Hello logs!", {structuredData: true});
-  axios.get("https://api.squiggle.com.au/?q=games&year=2022",{
-    headers:{
-      "User-Agent":"easytippingdev@gmail.com"
-    }
+  axios.get("https://api.squiggle.com.au/?q=games&year=2022", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
   }).then((res)=>{
     response.send(JSON.stringify(res.data));
-  })
+  });
 });
