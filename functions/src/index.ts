@@ -42,3 +42,15 @@ export const getCossiesGame = onRequest((request, response) => {
     response.send(JSON.stringify(res.data));
   });
 });
+
+export const getProjTips2024Round1 = onRequest((request, response) => {
+  axios.get("https://api.squiggle.com.au/?q=tips;year=2024;round=1", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then((res)=>{
+    response.send(JSON.stringify(res.data));
+  });
+});
+
+// hteamid, ateamid, tip, tipteamid, margin, confidence, venue, date, updated, round
