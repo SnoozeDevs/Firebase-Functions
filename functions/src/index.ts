@@ -1,13 +1,13 @@
-import {onRequest} from "firebase-functions/v2/https";
+import { onRequest } from "firebase-functions/v2/https";
 import axios from "axios";
-const {initializeApp} = require("firebase-admin/app");
+const { initializeApp } = require("firebase-admin/app");
 // const functions = require("firebase-functions");
 // const admin = require("firebase-admin");
 initializeApp();
 
 // import {onCall} from "firebase-functions/v2/https";
 // import {onDocumentWritten} from "firebase-functions/v2/firestore";
-const {getFirestore} = require("firebase-admin/firestore");
+const { getFirestore } = require("firebase-admin/firestore");
 const db = getFirestore();
 
 
@@ -55,23 +55,23 @@ export const getStandings = onRequest((request, response) => {
       await teamsCollection.doc(element.name).set(parseTeamObject(element));
     });
 
-    await standingsReference2023.set({ladder});
+    await standingsReference2023.set({ ladder });
 
     response.send("Standings and Ladder Submitted to DB!");
   });
 });
 
-export const getResults = onRequest(async (request, response) => {
+export const getResults2023 = onRequest(async (request, response) => {
   const standingsReference2023 = db.collection("standings").doc("2023");
   const resultsCollection = standingsReference2023.collection("results");
-  const roundsCollection = resultsCollection.doc("rounds").collection("Round 1");
 
-  axios.get(`https://api.squiggle.com.au/?q=games;year=2023;round=${1}`, {
+  axios.get("https://api.squiggle.com.au/?q=games;year=2023", {
     headers: {
       "User-Agent": "easytippingdev@gmail.com",
     },
   }).then(async (res) => {
     res.data.games.forEach(async (element: any) => {
+      const roundsCollection = resultsCollection.doc("rounds").collection(element.roundname);
       await roundsCollection.doc(`${element.hteam} vs ${element.ateam}`).set(element);
     });
 
