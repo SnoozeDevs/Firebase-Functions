@@ -11,17 +11,29 @@ const { getFirestore } = require("firebase-admin/firestore");
 const db = getFirestore();
 
 
-export const getTeams = onRequest((request, response) => {
-  axios.get("https://api.squiggle.com.au/?q=teams", {
+export const uploadTeams2023 = onRequest((request, response) => {
+
+  const standingsReference2023 = db.collection("standings").doc("2023");
+  const teamsCollection = standingsReference2023.collection("teams");
+
+  axios.get("https://api.squiggle.com.au/?q=teams;year=2023", {
     headers: {
       "User-Agent": "easytippingdev@gmail.com",
     },
   }).then((res) => {
-    response.send(res.data);
+    res.data.teams.forEach(async (team: any) => {
+      await teamsCollection.doc(team.name).update({
+        logo: team.logo,
+        abbreviation: team.abbrev
+      });
+
+    })
+    response.send("Team Data Updated in DB!");
   });
 });
 
-export const getProjTips2024Round1 = onRequest((request, response) => {
+export const uploadProjTips2024Round1 = onRequest((request, response) => {
+
   axios.get("https://api.squiggle.com.au/?q=tips;year=2024;round=1", {
     headers: {
       "User-Agent": "easytippingdev@gmail.com",
@@ -32,7 +44,7 @@ export const getProjTips2024Round1 = onRequest((request, response) => {
 });
 
 // ----------- Caveman Code -----------
-export const getStandings = onRequest((request, response) => {
+export const uploadStandings2023 = onRequest((request, response) => {
   const standingsReference2023 = db.collection("standings").doc("2023");
   const teamsCollection = standingsReference2023.collection("teams");
   const ladder: Array<string> = [];
@@ -61,7 +73,7 @@ export const getStandings = onRequest((request, response) => {
   });
 });
 
-export const getResults2023 = onRequest(async (request, response) => {
+export const uploadResults2023 = onRequest(async (request, response) => {
   const standingsReference2023 = db.collection("standings").doc("2023");
   const resultsCollection = standingsReference2023.collection("results");
 
@@ -77,6 +89,21 @@ export const getResults2023 = onRequest(async (request, response) => {
 
     response.send("2023 Results Submitted to DB!");
   });
+});
+
+export const getTeams = onRequest(async (request, response) => {
+
+  const teamDataArray: any = []
+
+  const teamsCollection = db.collection('standings').doc('2023').collection('teams')
+  await teamsCollection.get().then((team: any) => {
+    team.forEach((teamDoc: any) => {
+      teamDataArray.push(teamDoc.data())
+    })
+  })
+
+  response.send(teamDataArray);
+
 });
 
 // ----------- Chimp Code -----------
