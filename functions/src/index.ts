@@ -1,5 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
 import axios from "axios";
+import * as functions from 'firebase-functions';
 const { initializeApp } = require("firebase-admin/app");
 // const functions = require("firebase-functions");
 // const admin = require("firebase-admin");
@@ -11,7 +12,7 @@ const { getFirestore } = require("firebase-admin/firestore");
 const db = getFirestore();
 
 
-export const uploadTeams2023 = onRequest((request, response) => {
+export const uploadTeams2023 = functions.region('australia-southeast1').https.onRequest((request, response) => {
 
   const standingsReference2023 = db.collection("standings").doc("2023");
   const teamsCollection = standingsReference2023.collection("teams");
@@ -32,7 +33,7 @@ export const uploadTeams2023 = onRequest((request, response) => {
   });
 });
 
-export const uploadProjTips2024Round1 = onRequest((request, response) => {
+export const uploadProjTips2024Round1 = functions.region('australia-southeast1').https.onRequest((request, response) => {
 
   axios.get("https://api.squiggle.com.au/?q=tips;year=2024;round=1", {
     headers: {
@@ -44,7 +45,7 @@ export const uploadProjTips2024Round1 = onRequest((request, response) => {
 });
 
 // ----------- Caveman Code -----------
-export const uploadStandings2023 = onRequest((request, response) => {
+export const uploadStandings2023 = functions.region('australia-southeast1').https.onRequest((request, response) => {
   const standingsReference2023 = db.collection("standings").doc("2023");
   const teamsCollection = standingsReference2023.collection("teams");
   const ladder: Array<string> = [];
@@ -73,7 +74,7 @@ export const uploadStandings2023 = onRequest((request, response) => {
   });
 });
 
-export const uploadResults2023 = onRequest(async (request, response) => {
+export const uploadResults2023 = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   const standingsReference2023 = db.collection("standings").doc("2023");
   const resultsCollection = standingsReference2023.collection("results");
 
@@ -91,7 +92,7 @@ export const uploadResults2023 = onRequest(async (request, response) => {
   });
 });
 
-export const getTeams = onRequest(async (request, response) => {
+export const getTeams = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
 
   const teamDataArray: any = []
 
@@ -107,7 +108,7 @@ export const getTeams = onRequest(async (request, response) => {
 });
 
 // ----------- Chimp Code -----------
-// export const getStandings = functions.https.onRequest(() => {
+// export const getStandings = functions.region('australia-southeast1').https.onRequest(() => {
 //   axios.get("https://api.squiggle.com.au/?q=standings;year=2023", {
 //     headers: {
 //       "User-Agent": "easytippingdev@gmail.com",
