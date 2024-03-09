@@ -33,6 +33,8 @@ export const uploadTeams2023 = functions.region('australia-southeast1').https.on
   });
 });
 
+
+
 export const uploadProjTips2024Round1 = functions.region('australia-southeast1').https.onRequest((request, response) => {
 
   axios.get("https://api.squiggle.com.au/?q=tips;year=2024;round=1", {
@@ -146,6 +148,17 @@ export const getCurrentRound = functions.region('australia-southeast1').https.on
     response.send(`Current round: ${currentRound}`);
   });
 });
+
+export const updateCurrentRound = functions.region('australia-southeast1').pubsub
+  .schedule('0 0 * * *')
+  .timeZone('Australia/Sydney')
+  .onRun((context) => {
+    axios.get('https://australia-southeast1-easytipping-a7ad3.cloudfunctions.net/getCurrentRound').then(() => {
+      console.log("Updated cron job successfully")
+    }).catch((err) => {
+      console.error(err)
+    })
+  });
 
 
 
