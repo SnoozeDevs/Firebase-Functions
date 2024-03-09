@@ -116,8 +116,18 @@ export const uploadGames2024 = functions.region('australia-southeast1').https.on
       "User-Agent": "easytippingdev@gmail.com",
     },
   }).then(async (res) => {
+
+    let roundArray: any = []
     res.data.games.forEach(async (element: any) => {
+
+      //* Reset array every time the round changes
+      if (element.round === roundArray[roundArray.length - 1]?.round + 1) {
+        roundArray = []
+      }
+
       const roundsDoc = roundsRecord.doc(`${element.round}`);
+      roundArray.push(element)
+      roundsDoc.set({ roundArray })
       const roundCollection = roundsDoc.collection(`${element.id}`)
       await roundCollection.doc(`completeRecord`).set(element)
       await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
