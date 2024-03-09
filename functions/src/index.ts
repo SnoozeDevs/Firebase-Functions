@@ -1,4 +1,4 @@
-import { onRequest } from "firebase-functions/v2/https";
+// import { onRequest } from "firebase-functions/v2/https";
 import axios from "axios";
 import * as functions from 'firebase-functions';
 const { initializeApp } = require("firebase-admin/app");
@@ -91,6 +91,64 @@ export const uploadResults2023 = functions.region('australia-southeast1').https.
     response.send("2023 Results Submitted to DB!");
   });
 });
+
+export const uploadGames2024 = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
+  const standingsReference2024 = db.collection("standings").doc("2024");
+  const roundsRecord = standingsReference2024.collection("rounds");
+
+  const parseTimeRecord = (gameData: any) => {
+    const timeRecordObject = {
+      userLocalKickOff: gameData.date,
+      gameLocationKickOff: gameData.localtime,
+      time: gameData.timestr,
+      timezone: gameData.tz,
+      unixTime: gameData.unixtime,
+    }
+
+    return timeRecordObject;
+  }
+
+
+  axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then(async (res) => {
+    res.data.games.forEach(async (element: any) => {
+      const roundsDoc = roundsRecord.doc(`${element.round}`);
+      const roundCollection = roundsDoc.collection(`${element.id}`)
+      await roundCollection.doc(`completeRecord`).set(element)
+      await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
+    });
+
+    response.send(`2024 Results Submitted to DB!`);
+  });
+});
+
+export const getCurrentRound = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
+  const standingsReference2024 = db.collection("standings").doc("2024");
+  let roundsNotPlayed: any = []
+
+  axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then(async (res) => {
+    res.data.games.forEach(async (element: any) => {
+      if (element.timestr === null) {
+        roundsNotPlayed.push(element.round)
+        return
+      }
+    });
+
+    const currentRound = Math.min(...roundsNotPlayed)
+    standingsReference2024.set({ currentRound })
+    response.send(`Current round: ${currentRound}`);
+  });
+});
+
+
+
 
 export const getTeams = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
 
