@@ -94,6 +94,47 @@ export const uploadResults2023 = functions.region('australia-southeast1').https.
   });
 });
 
+
+const updateMatchRecords = async () => {
+
+  const standingsReference2024 = db.collection("standings").doc("2024");
+  const roundsRecord = standingsReference2024.collection("rounds");
+
+  const parseTimeRecord = (gameData: any) => {
+    const timeRecordObject = {
+      userLocalKickOff: gameData.date,
+      gameLocationKickOff: gameData.localtime,
+      time: gameData.timestr,
+      timezone: gameData.tz,
+      unixTime: gameData.unixtime,
+    }
+    return timeRecordObject;
+  }
+
+  axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then(async (res) => {
+
+    let roundArray: any = []
+    res.data.games.forEach(async (element: any) => {
+
+      //* Reset array every time the round changes
+      if (element.round === roundArray[roundArray.length - 1]?.round + 1) {
+        roundArray = []
+      }
+
+      const roundsDoc = roundsRecord.doc(`${element.round}`);
+      roundArray.push(element)
+      roundsDoc.set({ roundArray })
+      const roundCollection = roundsDoc.collection(`${element.id}`)
+      await roundCollection.doc(`completeRecord`).set(element)
+      await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
+    });
+  });
+}
+
 export const uploadGames2024 = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   const standingsReference2024 = db.collection("standings").doc("2024");
   const roundsRecord = standingsReference2024.collection("rounds");
@@ -170,6 +211,18 @@ export const updateCurrentRound = functions.region('australia-southeast1').pubsu
     })
   });
 
+//* Works for now - but is hugely inefficient (as it writes the whole season at a time)
+//todo convert to current round only update - will hugely reduce the read amounts
+export const taskRunner = functions.region('australia-southeast1').pubsub
+  //* runs every 5 minutes
+  .schedule('*/5 * * * *')
+  .timeZone('Australia/Sydney')
+  .onRun(async (context) => {
+
+    //* Update match records
+    await updateMatchRecords();
+
+  });
 
 
 
