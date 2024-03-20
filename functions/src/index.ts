@@ -95,45 +95,45 @@ export const uploadResults2023 = functions.region('australia-southeast1').https.
 });
 
 
-const updateMatchRecords = async () => {
+// const updateMatchRecords = async () => {
 
-  const standingsReference2024 = db.collection("standings").doc("2024");
-  const roundsRecord = standingsReference2024.collection("rounds");
+//   const standingsReference2024 = db.collection("standings").doc("2024");
+//   const roundsRecord = standingsReference2024.collection("rounds");
 
-  const parseTimeRecord = (gameData: any) => {
-    const timeRecordObject = {
-      userLocalKickOff: gameData.date,
-      gameLocationKickOff: gameData.localtime,
-      time: gameData.timestr,
-      timezone: gameData.tz,
-      unixTime: gameData.unixtime,
-    }
-    return timeRecordObject;
-  }
+//   const parseTimeRecord = (gameData: any) => {
+//     const timeRecordObject = {
+//       userLocalKickOff: gameData.date,
+//       gameLocationKickOff: gameData.localtime,
+//       time: gameData.timestr,
+//       timezone: gameData.tz,
+//       unixTime: gameData.unixtime,
+//     }
+//     return timeRecordObject;
+//   }
 
-  axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
-    headers: {
-      "User-Agent": "easytippingdev@gmail.com",
-    },
-  }).then(async (res) => {
+//   axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
+//     headers: {
+//       "User-Agent": "easytippingdev@gmail.com",
+//     },
+//   }).then(async (res) => {
 
-    let roundArray: any = []
-    res.data.games.forEach(async (element: any) => {
+//     let roundArray: any = []
+//     res.data.games.forEach(async (element: any) => {
 
-      //* Reset array every time the round changes
-      if (element.round === roundArray[roundArray.length - 1]?.round + 1) {
-        roundArray = []
-      }
+//       //* Reset array every time the round changes
+//       if (element.round === roundArray[roundArray.length - 1]?.round + 1) {
+//         roundArray = []
+//       }
 
-      const roundsDoc = roundsRecord.doc(`${element.round}`);
-      roundArray.push(element)
-      roundsDoc.set({ roundArray })
-      const roundCollection = roundsDoc.collection(`${element.id}`)
-      await roundCollection.doc(`completeRecord`).set(element)
-      await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
-    });
-  });
-}
+//       const roundsDoc = roundsRecord.doc(`${element.round}`);
+//       roundArray.push(element)
+//       roundsDoc.set({ roundArray })
+//       const roundCollection = roundsDoc.collection(`${element.id}`)
+//       await roundCollection.doc(`completeRecord`).set(element)
+//       await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
+//     });
+//   });
+// }
 
 export const uploadGames2024 = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   const standingsReference2024 = db.collection("standings").doc("2024");
@@ -178,6 +178,28 @@ export const uploadGames2024 = functions.region('australia-southeast1').https.on
   });
 });
 
+const updateFixtureForCurrentRound = async () => {
+  const standingsReference2024 = db.collection("standings").doc("2024");
+  const roundsRecord = standingsReference2024.collection("rounds");
+  const currentRound = await db.collection('standings').doc('2024').get()
+  const roundResponse = currentRound.data()
+  let round = roundResponse.currentRound
+
+  axios.get(`https://api.squiggle.com.au/?q=games;year=2024;round=${round}`, {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then(async (res) => {
+
+    let roundArray: any = []
+    const roundsDoc = roundsRecord.doc(`${round}`);
+    res.data.games.forEach(async (element: any) => {
+      roundArray.push(element)
+    });
+    roundsDoc.set({ roundArray })
+  });
+};
+
 export const getCurrentRound = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   const standingsReference2024 = db.collection("standings").doc("2024");
   let roundsNotPlayed: any = []
@@ -220,7 +242,7 @@ export const taskRunner = functions.region('australia-southeast1').pubsub
   .onRun(async (context) => {
 
     //* Update match records
-    await updateMatchRecords();
+    await updateFixtureForCurrentRound();
 
   });
 
