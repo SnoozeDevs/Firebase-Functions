@@ -1,16 +1,10 @@
-// import { onRequest } from "firebase-functions/v2/https";
 import axios from "axios";
 import * as functions from 'firebase-functions';
 const { initializeApp } = require("firebase-admin/app");
-// const functions = require("firebase-functions");
-// const admin = require("firebase-admin");
+const { getFirestore, Timestamp } = require("firebase-admin/firestore");
+
 initializeApp();
-
-// import {onCall} from "firebase-functions/v2/https";
-// import {onDocumentWritten} from "firebase-functions/v2/firestore";
-const { getFirestore } = require("firebase-admin/firestore");
 const db = getFirestore();
-
 
 export const uploadTeams2023 = functions.region('australia-southeast1').https.onRequest((request, response) => {
 
@@ -33,8 +27,6 @@ export const uploadTeams2023 = functions.region('australia-southeast1').https.on
   });
 });
 
-
-
 export const uploadProjTips2024Round1 = functions.region('australia-southeast1').https.onRequest((request, response) => {
 
   axios.get("https://api.squiggle.com.au/?q=tips;year=2024;round=1", {
@@ -46,7 +38,6 @@ export const uploadProjTips2024Round1 = functions.region('australia-southeast1')
   });
 });
 
-// ----------- Caveman Code -----------
 export const uploadStandings2023 = functions.region('australia-southeast1').https.onRequest((request, response) => {
   const standingsReference2023 = db.collection("standings").doc("2023");
   const teamsCollection = standingsReference2023.collection("teams");
@@ -233,14 +224,11 @@ export const updateCurrentRound = functions.region('australia-southeast1').pubsu
     })
   });
 
-//* Works for now - but is hugely inefficient (as it writes the whole season at a time)
-//todo convert to current round only update - will hugely reduce the read amounts
 export const taskRunner = functions.region('australia-southeast1').pubsub
   //* runs every 5 minutes
   .schedule('*/5 * * * *')
   .timeZone('Australia/Sydney')
-  .onRun(async (context) => {
-
+  .onRun(async () => {
     //* Update match records
     await updateFixtureForCurrentRound();
 
@@ -263,22 +251,66 @@ export const getTeams = functions.region('australia-southeast1').https.onRequest
 
 });
 
-// ----------- Chimp Code -----------
-// export const getStandings = functions.region('australia-southeast1').https.onRequest(() => {
-//   axios.get("https://api.squiggle.com.au/?q=standings;year=2023", {
-//     headers: {
-//       "User-Agent": "easytippingdev@gmail.com",
-//     },
-//   }).then((res) => {
-//     const standingsData = res.data.standings;
-//     const standingsCollection = admin.firestore().collection("standings");
-//     const batch = admin.firestore().batch();
-//     standingsData.forEach((standing: any) => {
-//       const docRef = standingsCollection.doc(standing.id.toString());
-//       batch.set(docRef, standing);
-//     });
-//     batch.commit();
-//   }).catch((error) => {
-//     console.error("it fckd", error);
-//   });
-// });
+
+//* This shoule be updated every week or so to ensure fixture changes are accounted for
+export const uploadAflMatchSchedule = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
+
+
+  const aflScheduler = db.collection('tasks').doc('sport').collection('afl')
+
+  axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then(async (res) => {
+    res.data.games.map((match: any) => {
+      aflScheduler.doc(`${match.id}`).set({
+        performAt: match.unixtime,
+        status: match.complete === 100 ? 'complete' : 'scheduled',
+        options: {
+          matchId: match.id,
+          round: match.round,
+        }
+      })
+    })
+  })
+
+  response.send(`AFL Matches Successfully Scheduled`);
+
+});
+
+interface Workers {
+  [key: string]: (options: any) => Promise<any>
+}
+
+const workers: Workers = {
+  updateRecord: (options: any) => db.collection('logs').add({
+    hello: 'world',
+    options: options
+  })
+}
+
+
+export const taskListener = functions.region('australia-southeast1').pubsub.schedule('* * * * *').timeZone('Australia/Sydney').onRun(async () => {
+  const timeStamp = Timestamp.now().seconds
+  const docRef = db.collection('tasks').doc('sport').collection('afl').where('performAt', '<=', timeStamp).where('status', '==', 'scheduled');
+  const tasksToRun = await docRef.get()
+  const jobArray: Promise<any>[] = []
+
+  tasksToRun.forEach((snapshot: any) => {
+    const { options } = snapshot.data();
+    const job = workers['updateRecord'](options).then(() => {
+      snapshot.ref.update({
+        status: 'complete'
+      })
+    }).catch(() => {
+      snapshot.ref.update({
+        status: 'error'
+      })
+    })
+
+    jobArray.push(job)
+  })
+
+  return await Promise.all(jobArray)
+})
