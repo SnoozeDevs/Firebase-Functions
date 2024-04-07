@@ -311,7 +311,7 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
     const winner = matchWinner.data.games[0].winner;
     options = {
       ...options,
-      winner: winner
+      winner: abbreviateTeam(winner)
     }
 
     const job = workers['updateRecord'](options).then(() => {
@@ -362,6 +362,51 @@ const updateActiveGamesAFL = async () => {
     })
   })
 }
+
+const abbreviateTeam = (teamName: string) => {
+
+  switch (teamName) {
+    case 'Richmond':
+      return 'RIC'
+    case 'Carlton':
+      return 'CAR'
+    case 'Sydney':
+      return 'SYD'
+    case 'Collingwood':
+      return 'COL'
+    case 'Hawthorn':
+      return 'HAW'
+    case 'Essendon':
+      return 'ESS'
+    case 'Brisbane Lions':
+      return 'BRI'
+    case 'Fremantle':
+      return 'FRE'
+    case 'St Kilda':
+      return 'STK'
+    case 'Geelong':
+      return 'GEL'
+    case 'Adelaide':
+      return 'ADE'
+    case 'Gold Coast':
+      return 'GCS'
+    case 'North Melbourne':
+      return 'NOR'
+    case 'Greater Western Sydney':
+      return 'GWS'
+    case 'Western Bulldogs':
+      return 'WBD'
+    case 'Melbourne':
+      return 'MEL'
+    case 'West Coast':
+      return 'WCE'
+    case 'Port Adelaide':
+      return 'POR'
+    default:
+      return 'Team not found'
+  }
+}
+
 
 
 
