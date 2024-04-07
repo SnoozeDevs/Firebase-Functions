@@ -224,6 +224,7 @@ export const updateCurrentRound = functions.region('australia-southeast1').pubsu
     })
   });
 
+//todo batch this current round update into the task listener, and only update the specific match record that just finishes. (can use id that is fetched on the listener)
 export const taskRunner = functions.region('australia-southeast1').pubsub
   //* runs every 5 minutes
   .schedule('*/5 * * * *')
@@ -231,9 +232,7 @@ export const taskRunner = functions.region('australia-southeast1').pubsub
   .onRun(async () => {
     //* Update match records
     await updateFixtureForCurrentRound();
-
   });
-
 
 
 export const getTeams = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
@@ -267,6 +266,7 @@ export const uploadAflMatchSchedule = functions.region('australia-southeast1').h
       aflScheduler.doc(`${match.id}`).set({
         performAt: match.unixtime,
         status: match.complete === 100 ? 'complete' : 'scheduled',
+        complete: match.complete === 100 ? true : false,
         options: {
           matchId: match.id,
           round: match.round,
@@ -276,7 +276,6 @@ export const uploadAflMatchSchedule = functions.region('australia-southeast1').h
   })
 
   response.send(`AFL Matches Successfully Scheduled`);
-
 });
 
 interface Workers {
@@ -293,15 +292,32 @@ const workers: Workers = {
 
 export const taskListener = functions.region('australia-southeast1').pubsub.schedule('* * * * *').timeZone('Australia/Sydney').onRun(async () => {
   const timeStamp = Timestamp.now().seconds
-  const docRef = db.collection('tasks').doc('sport').collection('afl').where('performAt', '<=', timeStamp).where('status', '==', 'scheduled');
+  const docRef = db.collection('tasks').doc('sport').collection('afl').where('performAt', '<=', timeStamp).where('status', '==', 'scheduled').where('complete', '==', true);
   const tasksToRun = await docRef.get()
   const jobArray: Promise<any>[] = []
 
-  tasksToRun.forEach((snapshot: any) => {
-    const { options } = snapshot.data();
+  await updateActiveGamesAFL()
+
+  tasksToRun.forEach(async (snapshot: any) => {
+
+    let { options } = snapshot.data();
+    const matchId = options.matchId
+    const matchWinner: any = await axios.get(`https://api.squiggle.com.au/?q=games;game=${matchId}`, {
+      headers: {
+        "User-Agent": "easytippingdev@gmail.com",
+      },
+    })
+
+    const winner = matchWinner.data.games[0].winner;
+    options = {
+      ...options,
+      winner: winner
+    }
+
     const job = workers['updateRecord'](options).then(() => {
       snapshot.ref.update({
-        status: 'complete'
+        status: 'complete',
+        complete: true,
       })
     }).catch(() => {
       snapshot.ref.update({
@@ -314,3 +330,38 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
 
   return await Promise.all(jobArray)
 })
+
+
+const updateActiveGamesAFL = async () => {
+
+  const currentRound = await db.collection('standings').doc('2024').get()
+  const roundResponse = currentRound.data()
+  let round = roundResponse.currentRound
+
+  await axios.get(`https://api.squiggle.com.au/?q=games;year=2024;round=${round}`, {
+    headers: {
+      "User-Agent": "easytippingdev@gmail.com",
+    },
+  }).then((response) => {
+    response.data.games.map(async (match: any) => {
+
+      const matchRef = db.collection('tasks').doc('sport').collection('afl').doc(`${match.id}`)
+      const matchData = await matchRef.get();
+      const { status } = matchData.data()
+
+      if (match.complete > 0 && match.complete < 100) {
+        matchRef.update({
+          status: 'in progress'
+        })
+      } else if (match.complete === 100 && status !== 'complete') {
+        matchRef.update({
+          status: 'scheduled',
+          complete: true,
+        })
+      }
+    })
+  })
+}
+
+
+
