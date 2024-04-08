@@ -390,7 +390,7 @@ const abbreviateTeam = (teamName: string) => {
 }
 
 
-//TODO Sync up this tips with cron function 'updateRecord'
+//TODO Sync this with cron function 'updateRecord'
 export const testFunc = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   //* traverse all of the users -> filter AFL -> validate all of the tips;
   const userRef = db.collection('users')
