@@ -283,6 +283,7 @@ interface Workers {
 }
 
 const workers: Workers = {
+  //TODO replace this log holder func with actual DB update function
   updateRecord: (options: any) => db.collection('logs').add({
     hello: 'world',
     options: options
@@ -353,11 +354,13 @@ const updateActiveGamesAFL = async () => {
         matchRef.update({
           status: 'in progress'
         })
+        //TODO add sepcific match record update in fixtures object here AND remove 5 min cron job doing that currently.
       } else if (match.complete === 100 && status !== 'complete') {
         matchRef.update({
           status: 'scheduled',
           complete: true,
         })
+        //TODO add sepcific match record update in fixtures object here AND remove 5 min cron job doing that currently.
       }
     })
   })
