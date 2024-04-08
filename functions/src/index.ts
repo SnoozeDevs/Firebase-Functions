@@ -85,47 +85,6 @@ export const uploadResults2023 = functions.region('australia-southeast1').https.
   });
 });
 
-
-// const updateMatchRecords = async () => {
-
-//   const standingsReference2024 = db.collection("standings").doc("2024");
-//   const roundsRecord = standingsReference2024.collection("rounds");
-
-//   const parseTimeRecord = (gameData: any) => {
-//     const timeRecordObject = {
-//       userLocalKickOff: gameData.date,
-//       gameLocationKickOff: gameData.localtime,
-//       time: gameData.timestr,
-//       timezone: gameData.tz,
-//       unixTime: gameData.unixtime,
-//     }
-//     return timeRecordObject;
-//   }
-
-//   axios.get("https://api.squiggle.com.au/?q=games;year=2024", {
-//     headers: {
-//       "User-Agent": "easytippingdev@gmail.com",
-//     },
-//   }).then(async (res) => {
-
-//     let roundArray: any = []
-//     res.data.games.forEach(async (element: any) => {
-
-//       //* Reset array every time the round changes
-//       if (element.round === roundArray[roundArray.length - 1]?.round + 1) {
-//         roundArray = []
-//       }
-
-//       const roundsDoc = roundsRecord.doc(`${element.round}`);
-//       roundArray.push(element)
-//       roundsDoc.set({ roundArray })
-//       const roundCollection = roundsDoc.collection(`${element.id}`)
-//       await roundCollection.doc(`completeRecord`).set(element)
-//       await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
-//     });
-//   });
-// }
-
 export const uploadGames2024 = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   const standingsReference2024 = db.collection("standings").doc("2024");
   const roundsRecord = standingsReference2024.collection("rounds");
@@ -284,10 +243,30 @@ interface Workers {
 
 const workers: Workers = {
   //TODO replace this log holder func with actual DB update function
-  updateRecord: (options: any) => db.collection('logs').add({
-    hello: 'world',
-    options: options
-  })
+  updateRecord: async (options: any) => {
+    //* Check users tips for that league (AFL)
+    // * Check it against the winner of that game using matchID,
+    // * IF loss - update UI and scores
+    //* IF Win - update UI and scores
+
+    //* traverse all of the users -> go directly to the sport AFL -> validate all of the tips;
+    //TODO Insert test function logic here
+
+    //* User Records need a ui update, scores need to be tracked in the user object first,
+    //* then in the group object.
+
+    //* Would be good to also send a log back to the logs object detailing what happened.
+
+    //* When tip updates happen, the tipping post from the frontend will need to be updated as it only supports the team selected atm.
+    //* But will need to support - if the match is done and IF the user was right - so need a more complext object.
+
+    return db.collection('logs').add({
+      hello: 'world',
+      options: options
+    })
+  }
+
+
 }
 
 
@@ -411,5 +390,31 @@ const abbreviateTeam = (teamName: string) => {
 }
 
 
+//TODO Sync up this tips with cron function 'updateRecord'
+export const testFunc = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
+  //* traverse all of the users -> filter AFL -> validate all of the tips;
+  const userRef = db.collection('users')
+  const users = await userRef.get()
+  const currentRound = await db.collection('standings').doc('2024').get()
+  const roundResponse = currentRound.data()
+  let round = roundResponse.currentRound
 
+  users.forEach(async (userSnapshot: any) => {
+    const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl')
+    const aflGroupRes = await aflGroupRef.get()
+    aflGroupRes.forEach(async (groupSnapshot: any) => {
+      console.log('user ID', userSnapshot.id, 'groupid', groupSnapshot.id);
+      const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${round}`);
+      const userTips = await userTipRef.get();
+      if (userTips.exists) {
+        //TODO Add successful / unsuccessful case here
+        console.log(`USER - ${userSnapshot.id}`, userTips.data());
+      } else {
+        //TODO Add no tip recorded case here
+        console.log(`No tips for round ${round}`)
+      }
+    })
+  })
 
+  response.send('Complete')
+})
