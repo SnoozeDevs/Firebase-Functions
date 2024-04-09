@@ -243,30 +243,76 @@ interface Workers {
 
 const workers: Workers = {
   //TODO replace this log holder func with actual DB update function
-  updateRecord: async (options: any) => {
-    //* Check users tips for that league (AFL)
-    // * Check it against the winner of that game using matchID,
-    // * IF loss - update UI and scores
-    //* IF Win - update UI and scores
+  updateRecord: async (options: any) => await updateTippingScores(options)
 
-    //* traverse all of the users -> go directly to the sport AFL -> validate all of the tips;
-    //TODO Insert test function logic here
 
-    //* User Records need a ui update, scores need to be tracked in the user object first,
-    //* then in the group object.
+  //* Check users tips for that league (AFL)
+  // * Check it against the winner of that game using matchID,
+  // * IF loss - update UI and scores
+  //* IF Win - update UI and scores
 
-    //* Would be good to also send a log back to the logs object detailing what happened.
 
-    //* When tip updates happen, the tipping post from the frontend will need to be updated as it only supports the team selected atm.
-    //* But will need to support - if the match is done and IF the user was right - so need a more complext object.
 
-    return db.collection('logs').add({
-      hello: 'world',
-      options: options
+  //* User Records need a ui update, scores need to be tracked in the user object first,
+  //* then in the group object.
+
+  //* Would be good to also send a log back to the logs object detailing what happened.
+
+  //* When tip updates happen, the tipping post from the frontend will need to be updated as it only supports the team selected atm.
+  //* But will need to support - if the match is done and IF the user was right - so need a more complext object.
+
+  // return db.collection('logs').add({
+  //   hello: 'world',
+  //   options: options
+  // })
+
+
+
+}
+
+const updateTippingScores = async (matchResult: any) => {
+  const userRef = db.collection('users')
+  const users = await userRef.get()
+  const currentRound = await db.collection('standings').doc('2024').get()
+  const roundResponse = currentRound.data()
+  let round = roundResponse.currentRound
+
+  users.forEach(async (userSnapshot: any) => {
+    const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl')
+    const aflGroupRes = await aflGroupRef.get()
+    aflGroupRes.forEach(async (groupSnapshot: any) => {
+      //! Replace 0 with round var after testing is done
+      const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${0}`);
+      const userTips = await userTipRef.get();
+      if (userTips.exists) {
+        //TODO Add successful / unsuccessful case here
+        if (userTips.data()[matchResult.matchId] === matchResult.winner) {
+          //* User has correct tip, update UI.
+          db.collection('logs').add({
+            user: userSnapshot.id,
+            game: matchResult.matchId,
+            winner: matchResult.winner,
+            tip: userTips.data()[matchResult.matchId],
+            status: 'Correct'
+          })
+        } else {
+          db.collection('logs').add({
+            user: userSnapshot.id,
+            game: matchResult.matchId,
+            winner: matchResult.winner,
+            tip: userTips.data()[matchResult.matchId],
+            status: 'Incorrect'
+          })
+          //* User has incorrect tip, update UI.
+          //*check for a draw
+        }
+        console.log(`USER - ${userSnapshot.id}`, userTips.data());
+      } else {
+        //TODO Add no tip recorded case here
+        console.log(`No tips for round ${round}`)
+      }
     })
-  }
-
-
+  })
 }
 
 
@@ -282,16 +328,19 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
 
     let { options } = snapshot.data();
     const matchId = options.matchId
-    const matchWinner: any = await axios.get(`https://api.squiggle.com.au/?q=games;game=${matchId}`, {
+    const matchResponse: any = await axios.get(`https://api.squiggle.com.au/?q=games;game=${matchId}`, {
       headers: {
         "User-Agent": "easytippingdev@gmail.com",
       },
     })
 
-    const winner = matchWinner.data.games[0].winner;
+    const gameData = matchResponse.data.games[0]
+    const winner = gameData.winner;
+
     options = {
       ...options,
-      winner: abbreviateTeam(winner)
+      winner: abbreviateTeam(winner),
+      draw: gameData.hscore === gameData.ascore
     }
 
     const job = workers['updateRecord'](options).then(() => {
@@ -392,29 +441,54 @@ const abbreviateTeam = (teamName: string) => {
 
 //TODO Sync this with cron function 'updateRecord'
 export const testFunc = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
-  //* traverse all of the users -> filter AFL -> validate all of the tips;
   const userRef = db.collection('users')
   const users = await userRef.get()
   const currentRound = await db.collection('standings').doc('2024').get()
   const roundResponse = currentRound.data()
   let round = roundResponse.currentRound
 
+  const matchResult = {
+    matchId: '35700',
+    winner: 'SYD'
+  }
+
   users.forEach(async (userSnapshot: any) => {
     const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl')
     const aflGroupRes = await aflGroupRef.get()
     aflGroupRes.forEach(async (groupSnapshot: any) => {
-      console.log('user ID', userSnapshot.id, 'groupid', groupSnapshot.id);
       const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${round}`);
       const userTips = await userTipRef.get();
       if (userTips.exists) {
         //TODO Add successful / unsuccessful case here
+        if (userTips.data()[matchResult.matchId] === matchResult.winner) {
+          //* User has correct tip, update UI.
+          db.collection('logs').add({
+            user: userSnapshot.id,
+            game: matchResult.matchId,
+            winner: matchResult.winner,
+            tip: userTips.data()[matchResult.matchId],
+            status: 'Correct'
+          })
+        } else {
+          db.collection('logs').add({
+            user: userSnapshot.id,
+            game: matchResult.matchId,
+            winner: matchResult.winner,
+            tip: userTips.data()[matchResult.matchId],
+            status: 'Incorrect'
+          })
+          //* User has incorrect tip, update UI.
+          //*check for a draw
+        }
         console.log(`USER - ${userSnapshot.id}`, userTips.data());
       } else {
         //TODO Add no tip recorded case here
+
         console.log(`No tips for round ${round}`)
       }
     })
   })
+
 
   response.send('Complete')
 })
