@@ -340,7 +340,9 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
     options = {
       ...options,
       winner: abbreviateTeam(winner),
-      draw: gameData.hscore === gameData.ascore
+      draw: gameData.hscore === gameData.ascore,
+      home: gameData.hteam,
+      away: gameData.ateam
     }
 
     const job = workers['updateRecord'](options).then(() => {
