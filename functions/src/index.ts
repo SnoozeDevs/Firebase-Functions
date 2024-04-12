@@ -288,43 +288,19 @@ const updateTippingScores = async (matchResult: any) => {
       if (userTips.exists) {
         //TODO Add successful / unsuccessful case here
         if (userTips.data()[matchResult.matchId] === matchResult.winner) {
-          userResultRef.add({
-            game: matchResult.matchId,
-            winner: matchResult.winner,
-            tip: userTips.data()[matchResult.matchId],
-            status: 'correct'
-          })
+          userResultRef.set({
+            [matchResult.matchId]: 'correct'
+          }, { merge: true })
           //* Update points record in groups.
 
-          //* User has correct tip, update UI.
-          // db.collection('logs').add({
-          //   user: userSnapshot.id,
-          //   game: matchResult.matchId,
-          //   winner: matchResult.winner,
-          //   tip: userTips.data()[matchResult.matchId],
-          //   status: 'Correct'
-          // })
         } else if (matchResult.draw) {
-          // db.collection('logs').add({
-          //   user: userSnapshot.id,
-          //   game: matchResult.matchId,
-          //   winner: matchResult.winner,
-          //   tip: userTips.data()[matchResult.matchId],
-          //   status: 'Incorrect'
-          // })
-          userResultRef.add({
-            game: matchResult.matchId,
-            winner: matchResult.winner,
-            tip: userTips.data()[matchResult.matchId],
-            status: 'draw'
-          })
+          userResultRef.set({
+            [matchResult.matchId]: 'draw'
+          }, { merge: true })
         } else {
-          userResultRef.add({
-            game: matchResult.matchId,
-            winner: matchResult.winner,
-            tip: userTips.data()[matchResult.matchId],
-            status: 'incorrect'
-          })
+          userResultRef.set({
+            [matchResult.matchId]: 'incorrect'
+          }, { merge: true })
         }
       } else {
         //TODO Add no tip recorded case here
@@ -477,27 +453,31 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
     const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl')
     const aflGroupRes = await aflGroupRef.get()
     aflGroupRes.forEach(async (groupSnapshot: any) => {
-      const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${round}`);
+      const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${0}`);
       const userTips = await userTipRef.get();
+      const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${0}`);
       if (userTips.exists) {
+
+        console.log(matchResult.matchId)
+        console.log(userTips.data())
         //TODO Add successful / unsuccessful case here
         if (userTips.data()[matchResult.matchId] === matchResult.winner) {
           //* User has correct tip, update UI.
-          db.collection('logs').add({
-            user: userSnapshot.id,
-            game: matchResult.matchId,
-            winner: matchResult.winner,
-            tip: userTips.data()[matchResult.matchId],
-            status: 'Correct'
-          })
+          userResultRef.set({
+            // game: matchResult.matchId,
+            // winner: matchResult.winner,
+            // tip: userTips.data()[matchResult.matchId],
+            // status: 'correct'
+            [matchResult.matchId]: 'correct'
+          }, { merge: true })
         } else {
-          db.collection('logs').add({
-            user: userSnapshot.id,
-            game: matchResult.matchId,
-            winner: matchResult.winner,
-            tip: userTips.data()[matchResult.matchId],
-            status: 'Incorrect'
-          })
+          userResultRef.set({
+            // game: matchResult.matchId,
+            // winner: matchResult.winner,
+            // tip: userTips.data()[matchResult.matchId],
+            // status: 'incorrect'
+            [matchResult.matchId]: 'incorrect'
+          }, { merge: true })
           //* User has incorrect tip, update UI.
           //*check for a draw
         }
