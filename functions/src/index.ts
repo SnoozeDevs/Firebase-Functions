@@ -288,7 +288,7 @@ const updateTippingScores = async (matchResult: any) => {
       if (userTips.exists) {
         //TODO Add successful / unsuccessful case here
         if (userTips.data()[matchResult.matchId] === matchResult.winner) {
-          userResultRef.set({
+          userResultRef.add({
             game: matchResult.matchId,
             winner: matchResult.winner,
             tip: userTips.data()[matchResult.matchId],
@@ -312,14 +312,14 @@ const updateTippingScores = async (matchResult: any) => {
           //   tip: userTips.data()[matchResult.matchId],
           //   status: 'Incorrect'
           // })
-          userResultRef.set({
+          userResultRef.add({
             game: matchResult.matchId,
             winner: matchResult.winner,
             tip: userTips.data()[matchResult.matchId],
             status: 'draw'
           })
         } else {
-          userResultRef.set({
+          userResultRef.add({
             game: matchResult.matchId,
             winner: matchResult.winner,
             tip: userTips.data()[matchResult.matchId],
