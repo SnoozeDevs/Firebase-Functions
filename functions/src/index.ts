@@ -283,30 +283,49 @@ const updateTippingScores = async (matchResult: any) => {
     aflGroupRes.forEach(async (groupSnapshot: any) => {
       //! Replace 0 with round var after testing is done
       const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${0}`);
+      const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${0}`);
       const userTips = await userTipRef.get();
       if (userTips.exists) {
         //TODO Add successful / unsuccessful case here
         if (userTips.data()[matchResult.matchId] === matchResult.winner) {
-          //* User has correct tip, update UI.
-          db.collection('logs').add({
-            user: userSnapshot.id,
+          userResultRef.set({
             game: matchResult.matchId,
             winner: matchResult.winner,
             tip: userTips.data()[matchResult.matchId],
-            status: 'Correct'
+            status: 'correct'
+          })
+          //* Update points record in groups.
+
+          //* User has correct tip, update UI.
+          // db.collection('logs').add({
+          //   user: userSnapshot.id,
+          //   game: matchResult.matchId,
+          //   winner: matchResult.winner,
+          //   tip: userTips.data()[matchResult.matchId],
+          //   status: 'Correct'
+          // })
+        } else if (matchResult.draw) {
+          // db.collection('logs').add({
+          //   user: userSnapshot.id,
+          //   game: matchResult.matchId,
+          //   winner: matchResult.winner,
+          //   tip: userTips.data()[matchResult.matchId],
+          //   status: 'Incorrect'
+          // })
+          userResultRef.set({
+            game: matchResult.matchId,
+            winner: matchResult.winner,
+            tip: userTips.data()[matchResult.matchId],
+            status: 'draw'
           })
         } else {
-          db.collection('logs').add({
-            user: userSnapshot.id,
+          userResultRef.set({
             game: matchResult.matchId,
             winner: matchResult.winner,
             tip: userTips.data()[matchResult.matchId],
-            status: 'Incorrect'
+            status: 'incorrect'
           })
-          //* User has incorrect tip, update UI.
-          //*check for a draw
         }
-        console.log(`USER - ${userSnapshot.id}`, userTips.data());
       } else {
         //TODO Add no tip recorded case here
         console.log(`No tips for round ${round}`)
