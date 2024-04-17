@@ -244,30 +244,6 @@ interface Workers {
 const workers: Workers = {
   //TODO replace this log holder func with actual DB update function
   updateRecord: async (options: any) => await updateTippingScores(options)
-
-
-  //* Check users tips for that league (AFL)
-  // * Check it against the winner of that game using matchID,
-  // * IF loss - update UI and scores
-  //* IF Win - update UI and scores
-
-
-
-  //* User Records need a ui update, scores need to be tracked in the user object first,
-  //* then in the group object.
-
-  //* Would be good to also send a log back to the logs object detailing what happened.
-
-  //* When tip updates happen, the tipping post from the frontend will need to be updated as it only supports the team selected atm.
-  //* But will need to support - if the match is done and IF the user was right - so need a more complext object.
-
-  // return db.collection('logs').add({
-  //   hello: 'world',
-  //   options: options
-  // })
-
-
-
 }
 
 const updateTippingScores = async (matchResult: any) => {
@@ -285,9 +261,9 @@ const updateTippingScores = async (matchResult: any) => {
       const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${0}`);
       const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${0}`);
       const userTips = await userTipRef.get();
-      if (userTips.exists) {
-        //TODO Add successful / unsuccessful case here
-        if (userTips.data()[matchResult.matchId] === matchResult.winner) {
+
+      const distributeTips = (userTip: string) => {
+        if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
           }, { merge: true })
@@ -297,18 +273,48 @@ const updateTippingScores = async (matchResult: any) => {
           userResultRef.set({
             [matchResult.matchId]: 'draw'
           }, { merge: true })
+          //* Update points record in groups.
         } else {
           userResultRef.set({
             [matchResult.matchId]: 'incorrect'
           }, { merge: true })
         }
+      }
+
+      if (userTips.exists) {
+        //TODO Add successful / unsuccessful case here
+        distributeTips(userTips.data()[matchResult.matchId])
+
+        // if (userTips.data()[matchResult.matchId] === matchResult.winner) {
+        //   userResultRef.set({
+        //     [matchResult.matchId]: 'correct'
+        //   }, { merge: true })
+        //   //* Update points record in groups.
+
+        // } else if (matchResult.draw) {
+        //   userResultRef.set({
+        //     [matchResult.matchId]: 'draw'
+        //   }, { merge: true })
+        //   //* Update points record in groups.
+        // } else {
+        //   userResultRef.set({
+        //     [matchResult.matchId]: 'incorrect'
+        //   }, { merge: true })
+        // }
       } else {
-        //TODO Add no tip recorded case here
-        console.log(`No tips for round ${round}`)
+
+        //* No tips - set away team then distribute scores.
+        await userTipRef.set({
+          [matchResult.matchId]: matchResult.ateam
+        }, { merge: true })
+
+        distributeTips(matchResult.ateam)
       }
     })
   })
 }
+
+
 
 
 export const taskListener = functions.region('australia-southeast1').pubsub.schedule('* * * * *').timeZone('Australia/Sydney').onRun(async () => {
@@ -484,7 +490,6 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
         console.log(`USER - ${userSnapshot.id}`, userTips.data());
       } else {
         //TODO Add no tip recorded case here
-
         console.log(`No tips for round ${round}`)
       }
     })
