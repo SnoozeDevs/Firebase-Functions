@@ -263,7 +263,7 @@ const updateTippingScores = async (matchResult: any) => {
       const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${matchResult.round}`);
       const userTips = await userTipRef.get();
 
-      const distributeScores = (userTip: string) => {
+      const distributeScores = async (userTip: string) => {
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
@@ -282,34 +282,22 @@ const updateTippingScores = async (matchResult: any) => {
         }
       }
 
-      if (userTips.exists) {
+      if (`${matchResult.matchId}` in userTips.data()) {
         //TODO Add successful / unsuccessful case here
-        distributeScores(userTips.data()[matchResult.matchId])
-
-        // if (userTips.data()[matchResult.matchId] === matchResult.winner) {
-        //   userResultRef.set({
-        //     [matchResult.matchId]: 'correct'
-        //   }, { merge: true })
-        //   //* Update points record in groups.
-
-        // } else if (matchResult.draw) {
-        //   userResultRef.set({
-        //     [matchResult.matchId]: 'draw'
-        //   }, { merge: true })
-        //   //* Update points record in groups.
-        // } else {
-        //   userResultRef.set({
-        //     [matchResult.matchId]: 'incorrect'
-        //   }, { merge: true })
-        // }
+        await distributeScores(userTips.data()[matchResult.matchId])
       } else {
-
         //* No tips - set away team then distribute scores.
         await userTipRef.set({
           [matchResult.matchId]: matchResult.away
-        }, { merge: true })
-
-        distributeScores(matchResult.away)
+        }, { merge: true }).then(async () => {
+          await distributeScores(matchResult.away)
+        }).catch((err: any) => {
+          db.collection('logs').add({
+            error: err,
+            matchId: matchResult.matchId,
+            user: userSnapshot.id
+          })
+        })
       }
     })
   })
@@ -454,10 +442,11 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
   console.log(round)
 
   const matchResult = {
-    matchId: '35700',
+    matchId: '35703',
     winner: 'SYD',
-    ateam: 'NOT',
+    away: 'MEL',
     draw: false,
+    round: 0,
   }
 
   users.forEach(async (userSnapshot: any) => {
@@ -469,7 +458,8 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
       const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${0}`);
       const userTips = await userTipRef.get();
 
-      const distributeScores = (userTip: string) => {
+      const distributeScores = async (userTip: string) => {
+        console.log('user tips', userTip)
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
@@ -488,34 +478,34 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
         }
       }
 
+      console.log(userTips.exists, userTips.data(), userTips.data()[`${matchResult.matchId}`])
+
       if (userTips.exists) {
         //TODO Add successful / unsuccessful case here
         distributeScores(userTips.data()[matchResult.matchId])
-
-        // if (userTips.data()[matchResult.matchId] === matchResult.winner) {
-        //   userResultRef.set({
-        //     [matchResult.matchId]: 'correct'
-        //   }, { merge: true })
-        //   //* Update points record in groups.
-
-        // } else if (matchResult.draw) {
-        //   userResultRef.set({
-        //     [matchResult.matchId]: 'draw'
-        //   }, { merge: true })
-        //   //* Update points record in groups.
-        // } else {
-        //   userResultRef.set({
-        //     [matchResult.matchId]: 'incorrect'
-        //   }, { merge: true })
-        // }
       } else {
 
         //* No tips - set away team then distribute scores.
         await userTipRef.set({
-          [matchResult.matchId]: matchResult.ateam
-        }, { merge: true })
+          [matchResult.matchId]: matchResult.away
+        }, { merge: true }).then(() => {
+          console.log('tip set')
+          distributeScores(matchResult.away)
+        }).catch((err: any) => {
+          console.log('error', err)
+        })
 
-        distributeScores(matchResult.ateam)
+        const userTip = await userTipRef().get()
+
+        db.collection('logs').add({
+          winner: matchResult.winner,
+          tip: matchResult.away,
+          match: matchResult.matchId,
+          round: matchResult.round,
+          userTipFromDB: userTip.data()
+        })
+
+
       }
     })
   })
