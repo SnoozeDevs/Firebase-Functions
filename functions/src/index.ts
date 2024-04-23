@@ -267,10 +267,14 @@ const updateTippingScores = async (matchResult: any) => {
           }, { merge: true })
           //TODO Update points record in groups.
 
+          //* 1 point add
+
         } else if (matchResult.draw) {
           userResultRef.set({
             [matchResult.matchId]: 'draw'
           }, { merge: true })
+
+          //* both get 1 point
           //TODO Update points record in groups.
         } else {
           userResultRef.set({
