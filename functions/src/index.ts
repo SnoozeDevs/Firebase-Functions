@@ -307,25 +307,6 @@ const updateTippingScores = async (matchResult: any) => {
       else {
         await noRecordedTip();
       }
-
-
-      // if (`${matchResult.matchId}` in userTips.data()) {
-      //   //TODO Add successful / unsuccessful case here
-      //   await distributeScores(userTips.data()[matchResult.matchId])
-      // } else {
-      //   //* No tips - set away team then distribute scores.
-      //   await userTipRef.set({
-      //     [matchResult.matchId]: matchResult.away
-      //   }, { merge: true }).then(async () => {
-      //     await distributeScores(matchResult.away)
-      //   }).catch((err: any) => {
-      //     db.collection('logs').add({
-      //       error: err,
-      //       matchId: matchResult.matchId,
-      //       user: userSnapshot.id
-      //     })
-      //   })
-      // }
     })
   })
 }
