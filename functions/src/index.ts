@@ -338,10 +338,12 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
 
     const gameData = matchResponse.data.games[0]
     const winner = gameData.winner;
+    const margin = Math.abs(gameData.hscore - gameData.ascore);
 
     //TODO - build in flow that adds an extra data point on current round - to flag if it is complete.
     options = {
       ...options,
+      margin: margin,
       winner: abbreviateTeam(winner),
       draw: gameData.hscore === gameData.ascore,
       home: abbreviateTeam(gameData.hteam),
