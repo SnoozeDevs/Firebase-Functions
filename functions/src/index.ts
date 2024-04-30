@@ -268,7 +268,7 @@ const updateTippingScores = async (matchResult: any) => {
             totalPoints: FieldValue.increment(pointsToAdd),
             margin: FieldValue.increment(tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin)))
             //todo add form
-          })
+          }, { merge: true })
         }
 
         if (userTip === matchResult.winner) {
