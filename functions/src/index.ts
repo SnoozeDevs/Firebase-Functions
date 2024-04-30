@@ -1,4 +1,5 @@
 import axios from "axios";
+import { FieldValue, Firestore } from "firebase-admin/firestore";
 import * as functions from 'firebase-functions';
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
@@ -260,26 +261,31 @@ const updateTippingScores = async (matchResult: any) => {
       const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${matchResult.round}`);
       const userTips = await userTipRef.get();
 
-      const distributeScores = async (userTip: string) => {
+      const distributeScores = async (userTip: string, roundMargin: number) => {
+
+        const postLeaderboardResults = (pointsToAdd: number, tipResult: 'correct' | 'incorrect') => {
+          db.collection('groups').doc(groupSnapshot.id).collection('leaderboard').doc(userSnapshot.id).set({
+            totalPoints: FieldValue.increment(pointsToAdd),
+            margin: FieldValue.increment(tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin)))
+            //todo add form
+          })
+        }
+
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
           }, { merge: true })
-          //TODO Update points record in groups.
-
-          //* 1 point add
-
+          postLeaderboardResults(1, 'correct')
         } else if (matchResult.draw) {
           userResultRef.set({
             [matchResult.matchId]: 'draw'
           }, { merge: true })
-
-          //* both get 1 point
-          //TODO Update points record in groups.
+          postLeaderboardResults(1, "correct")
         } else {
           userResultRef.set({
             [matchResult.matchId]: 'incorrect'
           }, { merge: true })
+          postLeaderboardResults(0, 'incorrect')
         }
       }
 
@@ -288,7 +294,7 @@ const updateTippingScores = async (matchResult: any) => {
         await userTipRef.set({
           [matchResult.matchId]: matchResult.away
         }, { merge: true }).then(async () => {
-          await distributeScores(matchResult.away)
+          await distributeScores(matchResult.away, 0)
         }).catch((err: any) => {
           db.collection('logs').add({
             error: err,
@@ -302,7 +308,9 @@ const updateTippingScores = async (matchResult: any) => {
       if (userTips.exists) {
         //* Check object key if specific match exists
         if (`${matchResult.matchId}` in userTips.data()) {
-          await distributeScores(userTips.data()[matchResult.matchId])
+          const userHasMargin = 'margin' in userTips.data();
+          const userMargin = userHasMargin ? userTips.data['margin'] : 0
+          await distributeScores(userTips.data()[matchResult.matchId], userMargin)
         } else {
           await noRecordedTip();
         }
@@ -471,6 +479,7 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
       const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${0}`);
       const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${0}`);
       const userTips = await userTipRef.get();
+
 
       const distributeScores = async (userTip: string) => {
         console.log('user tips', userTip)
