@@ -1,5 +1,5 @@
 import axios from "axios";
-import { FieldValue, Firestore } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import * as functions from 'firebase-functions';
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
