@@ -253,12 +253,13 @@ const updateTippingScores = async (matchResult: any) => {
   const userRef = db.collection('users')
   const users = await userRef.get()
 
-  users.forEach(async (userSnapshot: any) => {
-    const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl')
-    const aflGroupRes = await aflGroupRef.get()
-    aflGroupRes.forEach(async (groupSnapshot: any) => {
-      const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${matchResult.round}`);
-      const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${matchResult.round}`);
+  for (const userSnapshot of users.docs) {
+    const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl').get();
+
+    for (const groupSnapshot of aflGroupRef.docs) {
+      const userTipRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${matchResult.round}`);
+      const userResultRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${matchResult.round}`);
+
       const userTips = await userTipRef.get();
 
       const distributeScores = async (userTip: string, roundMargin: number) => {
@@ -270,7 +271,6 @@ const updateTippingScores = async (matchResult: any) => {
             //todo add form
           }, { merge: true })
         }
-
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
@@ -319,8 +319,8 @@ const updateTippingScores = async (matchResult: any) => {
       else {
         await noRecordedTip();
       }
-    })
-  })
+    }
+  }
 }
 
 
@@ -458,10 +458,6 @@ const abbreviateTeam = (teamName: string) => {
 export const testFunc = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
   const userRef = db.collection('users')
   const users = await userRef.get()
-  const currentRound = await db.collection('standings').doc('2024').get()
-  const roundResponse = currentRound.data()
-  let round = roundResponse.currentRound
-  console.log(round)
 
   const matchResult = {
     matchId: '35703',
@@ -469,53 +465,59 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
     away: 'MEL',
     draw: false,
     round: 0,
+    margin: 25,
   }
 
-  users.forEach(async (userSnapshot: any) => {
-    const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl')
-    const aflGroupRes = await aflGroupRef.get()
-    aflGroupRes.forEach(async (groupSnapshot: any) => {
-      //! Replace 0 with round var after testing is done
-      const userTipRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${0}`);
-      const userResultRef = await userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${0}`);
+  // * loops through all users
+  for await (const userSnapshot of users.docs) {
+
+
+    //* for each user, it checks the groups for AFL
+    console.log('user', userSnapshot.id)
+    const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl').get();
+
+    console.log(userSnapshot.id, 'exists', aflGroupRef.docs)
+    //* Loops over these groups one by one
+    for await (const groupSnapshot of aflGroupRef.docs) {
+      console.log('groups', groupSnapshot.data())
+      //* Gets the users tip for the passed round.
+      const userTipRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`0`);
+      const userResultRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`0`);
       const userTips = await userTipRef.get();
 
-
-      const distributeScores = async (userTip: string) => {
-        console.log('user tips', userTip)
+      const distributeScores = async (userTip: string, roundMargin: number) => {
+        const postLeaderboardResults = (pointsToAdd: number, tipResult: 'correct' | 'incorrect') => {
+          console.log('user snapshot to build leaderboard', userSnapshot.id)
+          db.collection('groups').doc(groupSnapshot.id).collection('leaderboard').doc(userSnapshot.id).set({
+            totalPoints: FieldValue.increment(pointsToAdd),
+            margin: FieldValue.increment(tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin)))
+            //todo add form
+          }, { merge: true })
+        }
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
           }, { merge: true })
-          //* Update points record in groups.
-
+          postLeaderboardResults(1, 'correct')
         } else if (matchResult.draw) {
           userResultRef.set({
             [matchResult.matchId]: 'draw'
           }, { merge: true })
-          //* Update points record in groups.
+          postLeaderboardResults(1, "correct")
         } else {
           userResultRef.set({
             [matchResult.matchId]: 'incorrect'
           }, { merge: true })
+          postLeaderboardResults(0, 'incorrect')
         }
       }
 
-      if (userTips.exists) {
-        console.log(userTips.data(), `${matchResult.matchId}` in userTips.data(), userTips.data() && `${matchResult.matchId}` in userTips.data())
-      } else {
-        console.log('No tip')
-      }
-
-      if (userTips.exists) {
-        //TODO Add successful / unsuccessful case here
-        await distributeScores(userTips.data()[matchResult.matchId])
-      } else {
-        //* No tips - set away team then distribute scores.
+      const noRecordedTip = async () => {
+        //* Set tip for that match to away team, then distribute tip results accordingly
         await userTipRef.set({
           [matchResult.matchId]: matchResult.away
         }, { merge: true }).then(async () => {
-          await distributeScores(matchResult.away)
+          await distributeScores(matchResult.away, 0)
         }).catch((err: any) => {
           db.collection('logs').add({
             error: err,
@@ -524,8 +526,20 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
           })
         })
       }
-    })
-  })
+
+      if (userTips.exists) {
+        if (`${matchResult.matchId}` in userTips.data()) {
+          const userHasMargin = 'margin' in userTips.data();
+          const userMargin = userHasMargin ? userTips.data['margin'] : 0
+          await distributeScores(userTips.data()[matchResult.matchId], userMargin)
+        } else {
+          await noRecordedTip();
+        }
+      } else {
+        await noRecordedTip();
+      }
+    }
+  }
 
 
   response.send('Complete')
