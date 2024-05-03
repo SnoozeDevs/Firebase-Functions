@@ -111,6 +111,7 @@ export const uploadGames2024 = functions.region('australia-southeast1').https.on
 
     let roundArray: any = []
     res.data.games.forEach(async (element: any) => {
+      let roundElement;
 
       //* Reset array every time the round changes
       if (element.round === roundArray[roundArray.length - 1]?.round + 1) {
@@ -119,10 +120,15 @@ export const uploadGames2024 = functions.region('australia-southeast1').https.on
 
       const roundsDoc = roundsRecord.doc(`${element.round}`);
       roundArray.push(element)
+      const isFirstMatch = roundArray[0].id === element.id
+      roundElement = {
+        ...element,
+        firstMatchOfRound: isFirstMatch
+      }
       roundsDoc.set({ roundArray })
       const roundCollection = roundsDoc.collection(`${element.id}`)
-      await roundCollection.doc(`completeRecord`).set(element)
-      await roundCollection.doc(`timeRecord`).set(parseTimeRecord(element));
+      await roundCollection.doc(`completeRecord`).set(roundElement)
+      await roundCollection.doc(`timeRecord`).set(parseTimeRecord(roundElement));
     });
 
     response.send(`2024 Results Submitted to DB!`);
@@ -259,17 +265,34 @@ const updateTippingScores = async (matchResult: any) => {
     for (const groupSnapshot of aflGroupRef.docs) {
       const userTipRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${matchResult.round}`);
       const userResultRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${matchResult.round}`);
-
       const userTips = await userTipRef.get();
+      const matchRef = await db.collection('standings').doc('2024').collection('rounds').doc(`${matchResult.round}`).collection(`${matchResult.matchId}`).doc('completeRecord').get()
+      const isFirstMatch = matchRef.data().firstMatchOfRound
 
       const distributeScores = async (userTip: string, roundMargin: number) => {
+        const parseMarginScore = (tipResult: string, isFirstMatch: boolean) => {
+          if (isFirstMatch) {
+            return tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin))
+          } else {
+            return 0
+          }
+        }
 
         const postLeaderboardResults = (pointsToAdd: number, tipResult: 'correct' | 'incorrect') => {
           db.collection('groups').doc(groupSnapshot.id).collection('leaderboard').doc(userSnapshot.id).set({
             totalPoints: FieldValue.increment(pointsToAdd),
-            margin: FieldValue.increment(tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin)))
+            margin: FieldValue.increment(parseMarginScore(tipResult, isFirstMatch))
             //todo add form
           }, { merge: true })
+          db.collection('logs').add({
+            match: matchResult.matchId,
+            score: pointsToAdd,
+            gameMargin: matchResult.margin,
+            correctMargin: Math.abs(roundMargin - matchResult.margin),
+            incorrectMargin: (roundMargin + Number(matchResult.margin)),
+            tipResult: tipResult,
+            userId: userSnapshot.id
+          })
         }
         if (userTip === matchResult.winner) {
           userResultRef.set({
@@ -363,7 +386,10 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
         status: 'complete',
         complete: true,
       })
-    }).catch(() => {
+    }).catch(async (error) => {
+      await db.collection('logs').add({
+        error: error
+      })
       snapshot.ref.update({
         status: 'error'
       })
