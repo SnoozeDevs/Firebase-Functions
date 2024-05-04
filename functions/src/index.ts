@@ -291,7 +291,8 @@ const updateTippingScores = async (matchResult: any) => {
             correctMargin: Math.abs(roundMargin - matchResult.margin),
             incorrectMargin: (roundMargin + Number(matchResult.margin)),
             tipResult: tipResult,
-            userId: userSnapshot.id
+            userId: userSnapshot.id,
+            group: groupSnapshot.id,
           })
         }
         if (userTip === matchResult.winner) {
@@ -495,45 +496,62 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
   }
 
   // * loops through all users
-  for await (const userSnapshot of users.docs) {
-
-
-    //* for each user, it checks the groups for AFL
-    console.log('user', userSnapshot.id)
+  for (const userSnapshot of users.docs) {
+    //* Gets the users who tip AFL
     const aflGroupRef = await userRef.doc(userSnapshot.id).collection('groups').where('league', '==', 'afl').get();
-
-    console.log(userSnapshot.id, 'exists', aflGroupRef.docs)
-    //* Loops over these groups one by one
-    for await (const groupSnapshot of aflGroupRef.docs) {
-      console.log('groups', groupSnapshot.data())
-      //* Gets the users tip for the passed round.
-      const userTipRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`0`);
-      const userResultRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`0`);
+    //* Loops through the afl groups
+    for (const groupSnapshot of aflGroupRef.docs) {
+      //* Gets their tips and results
+      const userTipRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('tips').doc(`${matchResult.round}`);
+      const userResultRef = userRef.doc(userSnapshot.id).collection('groups').doc(groupSnapshot.id).collection('results').doc(`${matchResult.round}`);
       const userTips = await userTipRef.get();
+      const matchRef = await db.collection('standings').doc('2024').collection('rounds').doc(`${matchResult.round}`).collection(`${matchResult.matchId}`).doc('completeRecord').get()
+      const isFirstMatch = matchRef.data().firstMatchOfRound
 
       const distributeScores = async (userTip: string, roundMargin: number) => {
+        const parseMarginScore = (tipResult: string, isFirstMatch: boolean) => {
+          if (isFirstMatch) {
+            return tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin))
+          } else {
+            return 0
+          }
+        }
+
         const postLeaderboardResults = (pointsToAdd: number, tipResult: 'correct' | 'incorrect') => {
-          console.log('user snapshot to build leaderboard', userSnapshot.id)
           db.collection('groups').doc(groupSnapshot.id).collection('leaderboard').doc(userSnapshot.id).set({
             totalPoints: FieldValue.increment(pointsToAdd),
-            margin: FieldValue.increment(tipResult === 'correct' ? Math.abs(roundMargin - matchResult.margin) : (roundMargin + Number(matchResult.margin)))
+            margin: FieldValue.increment(parseMarginScore(tipResult, isFirstMatch))
             //todo add form
           }, { merge: true })
+          db.collection('logs').add({
+            match: matchResult.matchId,
+            score: pointsToAdd,
+            gameMargin: matchResult.margin,
+            correctMargin: Math.abs(roundMargin - matchResult.margin),
+            incorrectMargin: (roundMargin + Number(matchResult.margin)),
+            tipResult: tipResult,
+            userId: userSnapshot.id,
+            group: groupSnapshot.id,
+          })
         }
+
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
           }, { merge: true })
+          console.log('correct called')
           postLeaderboardResults(1, 'correct')
         } else if (matchResult.draw) {
           userResultRef.set({
             [matchResult.matchId]: 'draw'
           }, { merge: true })
+          console.log('draw called')
           postLeaderboardResults(1, "correct")
         } else {
           userResultRef.set({
             [matchResult.matchId]: 'incorrect'
           }, { merge: true })
+          console.log('incorrect called')
           postLeaderboardResults(0, 'incorrect')
         }
       }
@@ -553,7 +571,9 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
         })
       }
 
+      //* If the user has a single tip in the round
       if (userTips.exists) {
+        //* Check object key if specific match exists
         if (`${matchResult.matchId}` in userTips.data()) {
           const userHasMargin = 'margin' in userTips.data();
           const userMargin = userHasMargin ? userTips.data['margin'] : 0
@@ -561,7 +581,9 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
         } else {
           await noRecordedTip();
         }
-      } else {
+      }
+      //* Distribute all tips in round with no recorded case
+      else {
         await noRecordedTip();
       }
     }
