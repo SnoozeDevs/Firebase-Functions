@@ -358,8 +358,7 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
 
   await updateActiveGamesAFL()
 
-  tasksToRun.forEach(async (snapshot: any) => {
-
+  for await (const snapshot of tasksToRun.docs) {
     let { options } = snapshot.data();
     const matchId = options.matchId
     const matchResponse: any = await axios.get(`https://api.squiggle.com.au/?q=games;game=${matchId}`, {
@@ -397,8 +396,7 @@ export const taskListener = functions.region('australia-southeast1').pubsub.sche
     })
 
     jobArray.push(job)
-  })
-
+  }
   return await Promise.all(jobArray)
 })
 
@@ -591,4 +589,60 @@ export const testFunc = functions.region('australia-southeast1').https.onRequest
 
 
   response.send('Complete')
+})
+
+export const testscheduler = functions.region('australia-southeast1').https.onRequest(async (request, response) => {
+
+  const timeStamp = Timestamp.now().seconds
+  const docRef = db.collection('tasks').doc('sport').collection('afl').where('performAt', '<=', timeStamp).where('status', '==', 'scheduled').where('complete', '==', true);
+  const tasksToRun = await docRef.get()
+  const jobArray: Promise<any>[] = []
+
+  await updateActiveGamesAFL()
+
+
+  for await (const snapshot of tasksToRun.docs) {
+
+
+    let { options } = snapshot.data();
+    console.log(options.matchId)
+    const matchId = options.matchId
+    const matchResponse: any = await axios.get(`https://api.squiggle.com.au/?q=games;game=${matchId}`, {
+      headers: {
+        "User-Agent": "easytippingdev@gmail.com",
+      },
+    })
+
+    const gameData = matchResponse.data.games[0]
+    const winner = gameData.winner;
+    const margin = Math.abs(gameData.hscore - gameData.ascore);
+
+    //TODO - build in flow that adds an extra data point on current round - to flag if it is complete.
+    options = {
+      ...options,
+      margin: margin,
+      winner: abbreviateTeam(winner),
+      draw: gameData.hscore === gameData.ascore,
+      home: abbreviateTeam(gameData.hteam),
+      away: abbreviateTeam(gameData.ateam)
+    }
+
+    const job = workers['updateRecord'](options).then(() => {
+      snapshot.ref.update({
+        status: 'complete',
+        complete: true,
+      })
+    }).catch(async (error) => {
+      await db.collection('logs').add({
+        error: error
+      })
+      snapshot.ref.update({
+        status: 'error'
+      })
+    })
+
+    jobArray.push(job)
+  }
+
+  console.log(jobArray)
 })
