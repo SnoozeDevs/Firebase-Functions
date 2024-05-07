@@ -251,7 +251,6 @@ interface Workers {
 }
 
 const workers: Workers = {
-  //TODO replace this log holder func with actual DB update function
   updateRecord: async (options: any) => await updateTippingScores(options)
 }
 
