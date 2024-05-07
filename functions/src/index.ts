@@ -278,11 +278,12 @@ const updateTippingScores = async (matchResult: any) => {
         }
 
         const postLeaderboardResults = (pointsToAdd: number, tipResult: 'correct' | 'incorrect') => {
+
           db.collection('groups').doc(groupSnapshot.id).collection('leaderboard').doc(userSnapshot.id).set({
             totalPoints: FieldValue.increment(pointsToAdd),
             margin: FieldValue.increment(parseMarginScore(tipResult, isFirstMatch))
-            //todo add form
           }, { merge: true })
+
           db.collection('logs').add({
             match: matchResult.matchId,
             score: pointsToAdd,
@@ -294,6 +295,8 @@ const updateTippingScores = async (matchResult: any) => {
             group: groupSnapshot.id,
           })
         }
+
+
         if (userTip === matchResult.winner) {
           userResultRef.set({
             [matchResult.matchId]: 'correct'
